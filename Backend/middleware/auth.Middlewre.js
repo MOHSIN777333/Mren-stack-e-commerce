@@ -4,9 +4,11 @@ import { ErrorHandle } from "./errorMiddleware.js";
 import { connectDB } from "../config/databases/db.js";
 
 export const isAuthenticated = catchAsyncError(async (req, res, next) => {
-  const { token } = body.cookie;
+  const { token } = req.cookies;
+  console.log("token", token);
+
   if (!token) {
-    return next(new ErrorHandle("first register then authendicated", 400));
+    return next(new ErrorHandle("first go to login then do this", 400));
   }
 
   const decoded = jwt.verify(token, process.env.JWT_SERCET);
@@ -22,10 +24,11 @@ export const isAuthenticated = catchAsyncError(async (req, res, next) => {
 
 export const AuthorizedRoles = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.roles)) {
+    if (!roles.includes(req.user.role)) {
       return next(
         new ErrorHandle(
-          `roles: ${req.user.roles} is not allwo to access to this resource`,
+          `roles: ${req.user.role} is not allwo to access to this resource`,
+          403,
         ),
       );
     }
