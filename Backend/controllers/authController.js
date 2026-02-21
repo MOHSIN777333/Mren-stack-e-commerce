@@ -3,6 +3,9 @@ import { catchAsyncError } from "../middleware/catchAsyncError.js";
 import { ErrorHandle } from "../middleware/errorMiddleware.js";
 import bcrypt from "bcrypt";
 import { sendToken } from "../utils/jwtToken.js";
+import { generatResetPasswordToken } from "../utils/generatResetPasswordToken.js";
+import { forgotPasswordEmailTemplate } from "../utils/forgotPasswordEmailTemplate.js";
+import { sendEmail } from "../utils/sendEmail.js";
 
 export const register = catchAsyncError(async (req, res, next) => {
   const { name, email, password } = req.body;
@@ -72,4 +75,44 @@ export const logout = catchAsyncError(async (req, res, next) => {
       success: true,
       message: "user logout successfully",
     });
+});
+export const forgetPassword = catchAsyncError(async (req, res, next) => {
+  const { email } = req.body;
+  const { frontendurl } = req.prame;
+
+  const findUser = await connectDB.query(
+    "SELECT * FROM users WHERE email = $1",
+    [email],
+  );
+  if (findUser.rows.length === 0) {
+    return next(new ErrorHandle("invalid email this is email no found", 404));
+  }
+  const user = findUser.rows[0];
+  const { resetToken, hashPassword, resetTokenExpires } =
+    generatResetPasswordToken();
+
+  await connectDB.query(
+    "UPDTAE users SET reset_password_token = $1  reset_expire = to_timestamp($2) WHERE email = $3",
+    [hashPassword, resetTokenExpires / 1000, email],
+  );
+
+  const resetPasswordUrl = `${frontendurl}/password/reset/${resetToken}`;
+  const message = forgotPasswordEmailTemplate(resetPasswordUrl);
+
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: "ECOMMERCE PASSWORD RECOVERLY",
+      message,
+    });
+    res.status(200).json({
+      success: true,
+      message: `email send to ${user.email} successfully`,
+    });
+  } catch (error) {
+    await connectDB.query(
+      "UPDATE users SET reset_password_token = NULL reset_expire = NULL WHERE email = $1",
+      [email],
+    );
+  }
 });
